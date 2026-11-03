@@ -1,14 +1,9 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 
-// Only the landing page is public. This is an optimistic redirect for UX;
-// the real authorization is enforced inside every Convex function.
-const isPublicRoute = createRouteMatcher(["/"]);
-
-export default clerkMiddleware(async (auth, req) => {
-  if (!isPublicRoute(req)) {
-    await auth.protect();
-  }
-});
+// Makes the Clerk session available to server code. Route protection is
+// resource-based (Clerk v7 guidance): signed-in pages call auth.protect() in
+// their layout, and the real authorization is enforced in every Convex function.
+export default clerkMiddleware();
 
 export const config = {
   matcher: [
