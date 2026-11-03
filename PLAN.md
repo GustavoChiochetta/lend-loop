@@ -49,17 +49,18 @@ Marque `[x]` conforme cada item for concluído. Cada fase termina com um checkpo
 - [x] ✅ Checkpoint: 22 testes automatizados de regras de acesso (`npm test`, com convex-test)
 
 ## Fase 3 — Frontend
-- [ ] Página pública: nome, tagline, lista pública e botão "Sign in to lend or borrow"
-- [ ] Layout logado com navegação (Tools, My listings, My requests, Incoming, Admin)
-- [ ] Tools: lista com status de disponibilidade, filtro por categoria e ação "Request"
-- [ ] Modal ou form de pedido com período de datas
-- [ ] My listings: criar, editar e excluir
-- [ ] My requests: status dos meus pedidos
-- [ ] Incoming requests: aprovar, recusar e marcar como devolvido
-- [ ] Admin: remover qualquer anúncio, ver todos os empréstimos, marcar Trusted Lender
-- [ ] Badge "Trusted Lender" nas ferramentas
-- [ ] Estados de loading, vazio e erro
-- [ ] ✅ Checkpoint: fluxo completo manual com 2 usuários + 1 admin
+- [x] Página pública: nome, tagline, lista pública (só nome e categoria) e botão "Sign in to lend or borrow"
+- [x] Layout logado com navegação (Tools, My listings, My requests, Incoming, Admin só para admin)
+- [x] Tools: lista com status de disponibilidade, filtro por categoria e ação "Request"
+- [x] Form de pedido com período de datas (máx. 30 dias, mostra datas já reservadas)
+- [x] My listings: criar, editar e excluir
+- [x] My requests: status dos meus pedidos (com aviso de atraso)
+- [x] Incoming requests: aprovar, recusar e marcar como devolvido
+- [x] Admin: remover qualquer anúncio (no catálogo), ver todos os empréstimos com filtro, marcar Trusted Lender
+- [x] Badge "Trusted Lender" nas ferramentas e no cabeçalho
+- [x] Estados de loading, vazio e erro (mensagens do backend aparecem nos formulários)
+- [x] Seed de demonstração: `npx convex run seed:demo`
+- [x] ✅ Checkpoint: fluxo testado no navegador (listar, pedir, aprovar, erro de conflito, admin, mobile)
 
 ## Fase 4 — Integração Convex ↔ n8n
 - [ ] `docker-compose.yml`: n8n + Mailpit (com volume persistente)
