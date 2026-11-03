@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { Show, SignInButton, UserButton } from "@clerk/nextjs";
+import { AuthStatus } from "@/components/AuthStatus";
 
 // Phase 0 placeholder: proves Clerk is wired. The real landing page
 // (public tool list from Convex) is built in Phase 3.
@@ -22,6 +23,7 @@ export default function Home() {
           <UserButton />
         </Show>
       </Suspense>
+      <AuthStatus />
     </main>
   );
 }

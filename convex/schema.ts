@@ -32,6 +32,10 @@ export default defineSchema({
     category: vCategory,
     condition: vCondition,
     description: v.string(),
+    // Soft delete: removed listings disappear from every view, but the row is
+    // kept so past loans still resolve and the removal is auditable.
+    removedAt: v.optional(v.number()),
+    removedBy: v.optional(v.id("users")),
   })
     .index("by_owner", ["ownerId"])
     .index("by_category", ["category"]),

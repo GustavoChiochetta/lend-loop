@@ -19,10 +19,12 @@ Marque `[x]` conforme cada item for concluído. Cada fase termina com um checkpo
 - [x] Instalar o Convex (validado num deployment local anônimo)
 - [x] Instalar o Clerk (v7) e configurar `ClerkProvider` + `ConvexProviderWithClerk` + `src/proxy.ts`
 - [x] `convex/auth.config.ts`
-- [ ] **Você**: ativar a integração Convex no Clerk (gera o JWT "convex") e definir `CLERK_JWT_ISSUER_DOMAIN` no Convex
+- [x] **Você**: ativar a integração Convex no Clerk e definir `CLERK_JWT_ISSUER_DOMAIN` no Convex
+- [x] **Você**: customizar o session token do Clerk com `email`, `email_verified`, `name` e `given_name` (documentar no README)
+- [x] `ADMIN_EMAILS` definido no Convex
 - [x] `.env.example` com todas as variáveis documentadas
-- [ ] **Você**: criar as contas e apps no Clerk e no Convex e preencher o `.env.local`
-- [ ] ✅ Checkpoint: app sobe, login funciona, Convex conectado
+- [x] **Você**: criar a aplicação no Clerk e preencher o `.env.local` (Convex ainda no deployment local anônimo)
+- [x] ✅ Checkpoint: app sobe, login funciona, Convex reconhece o usuário e o papel admin
 
 ## Fase 1 — Modelo de dados (Convex schema)
 - [x] `users` (tokenIdentifier, email, name, role, trustedLender)
@@ -33,18 +35,18 @@ Marque `[x]` conforme cada item for concluído. Cada fase termina com um checkpo
 - [x] Categorias, condições e status como enums validados no backend (`convex/lib/validators.ts`)
 
 ## Fase 2 — Backend e controle de acesso
-- [ ] Helpers de auth: `getCurrentUser`, `requireUser`, `requireAdmin`
-- [ ] `users.ensure`: cria ou atualiza o usuário no login e aplica o papel via `ADMIN_EMAILS`
-- [ ] `tools.listPublic`: só nome e categoria, sem login
-- [ ] `tools.list`: com disponibilidade e filtro por categoria (requer login)
-- [ ] `tools.create / update / remove`: só o dono; `remove` também pelo admin
-- [ ] `loans.request`: valida datas, impede pedir a própria ferramenta e impede conflito com empréstimo aprovado
-- [ ] `loans.approve / decline`: só o lender
-- [ ] `loans.markReturned`: lender (ou borrower, a definir)
-- [ ] `loans.myRequests / incoming / all` (`all` só para admin)
-- [ ] `users.setTrustedLender`: só admin
-- [ ] Validação de inputs (tamanho máximo de texto, datas coerentes)
-- [ ] ✅ Checkpoint: testar regras de acesso chamando as funções direto
+- [x] Helpers de auth: `getCurrentUser`, `requireUser`, `requireAdmin` (`convex/lib/auth.ts`)
+- [x] `users.ensure`: cria ou atualiza o usuário no login e aplica o papel via `ADMIN_EMAILS` (só com e-mail verificado)
+- [x] `tools.listPublic`: só nome e categoria, sem login (esconde ferramentas emprestadas e removidas)
+- [x] `tools.list`: com disponibilidade e filtro por categoria (requer login, sem e-mail do dono)
+- [x] `tools.create / update / remove`: só o dono; `remove` também pelo admin (soft delete; recusa pedidos pendentes)
+- [x] `loans.request`: valida datas (máx. 30 dias), impede pedir a própria ferramenta e impede conflito com empréstimo aprovado
+- [x] `loans.approve / decline`: só o lender; aprovar recusa os pendentes sobrepostos
+- [x] `loans.markReturned`: só o lender (decidido: é quem confirma que recebeu de volta)
+- [x] `loans.myRequests / incoming / listAll` (`listAll` só para admin)
+- [x] `users.setTrustedLender` e `users.list`: só admin
+- [x] Validação de inputs (tamanho máximo de texto, datas coerentes)
+- [x] ✅ Checkpoint: 22 testes automatizados de regras de acesso (`npm test`, com convex-test)
 
 ## Fase 3 — Frontend
 - [ ] Página pública: nome, tagline, lista pública e botão "Sign in to lend or borrow"

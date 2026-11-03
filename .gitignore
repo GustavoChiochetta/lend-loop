@@ -46,3 +46,6 @@ next-env.d.ts
 
 # clerk keyless mode (temporary dev keys)
 .clerk/
+
+# local Claude Code preview config (machine-specific paths)
+.claude/
