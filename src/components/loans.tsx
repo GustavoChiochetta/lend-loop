@@ -10,7 +10,7 @@ export type LoanView = FunctionReturnType<typeof api.loans.myRequests>[number];
 
 export function StatusBadge({ loan }: { loan: LoanView }) {
   if (loan.isOverdue) return <Badge tone="red">Overdue</Badge>;
-  const tone = { pending: "amber", approved: "green", declined: "neutral", returned: "blue" } as const;
+  const tone = { pending: "amber", approved: "green", declined: "neutral", returned: "blue", cancelled: "neutral" } as const;
   return <Badge tone={tone[loan.status]}>{STATUS_LABELS[loan.status]}</Badge>;
 }
 

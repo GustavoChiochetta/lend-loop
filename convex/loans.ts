@@ -2,10 +2,10 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { requireAdmin, requireUser } from "./lib/auth";
-import { getApprovedLoans } from "./lib/availability";
+import { getLoans } from "./lib/availability";
 import { addDays, assertIsoDate, MAX_LOAN_DAYS, rangesOverlap, todayIso } from "./lib/dates";
 import { appError } from "./lib/errors";
-import type { LoanStatus } from "./lib/validators";
+import { transition } from "./lib/lifecycle";
 
 // ── Mutations ───────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ export const request = mutation({
     }
 
     const range = { startDate, endDate };
-    const approved = await getApprovedLoans(ctx, toolId);
+    const approved = await getLoans(ctx, toolId, "approved");
     if (approved.some((loan) => rangesOverlap(loan, range))) {
       throw appError("CONFLICT", "The tool is already booked for those dates.");
     }
@@ -59,26 +59,20 @@ export const approve = mutation({
   args: { loanId: v.id("loans") },
   handler: async (ctx, { loanId }) => {
     const loan = await getLoanAsLender(ctx, loanId);
-    assertStatus(loan, "pending");
-
     const tool = await ctx.db.get(loan.toolId);
     if (!tool || tool.removedAt) throw appError("CONFLICT", "This tool is no longer listed.");
     if (loan.endDate < todayIso()) {
       throw appError("CONFLICT", "The requested dates have already passed. Decline it instead.");
     }
 
-    const approved = await getApprovedLoans(ctx, loan.toolId);
-    if (approved.some((other) => rangesOverlap(other, loan))) {
+    const approved = await getLoans(ctx, loan.toolId, "approved");
+    if (approved.some((other) => other._id !== loan._id && rangesOverlap(other, loan))) {
       throw appError("CONFLICT", "Another approved loan overlaps these dates.");
     }
 
     await transition(ctx, loan, "approved");
 
-    const otherPending = await ctx.db
-      .query("loans")
-      .withIndex("by_tool_status", (q) => q.eq("toolId", loan.toolId).eq("status", "pending"))
-      .collect();
-    for (const other of otherPending) {
+    for (const other of await getLoans(ctx, loan.toolId, "pending")) {
       if (rangesOverlap(other, loan)) await transition(ctx, other, "declined");
     }
   },
@@ -88,7 +82,6 @@ export const decline = mutation({
   args: { loanId: v.id("loans") },
   handler: async (ctx, { loanId }) => {
     const loan = await getLoanAsLender(ctx, loanId);
-    assertStatus(loan, "pending");
     await transition(ctx, loan, "declined");
   },
 });
@@ -98,7 +91,6 @@ export const markReturned = mutation({
   args: { loanId: v.id("loans") },
   handler: async (ctx, { loanId }) => {
     const loan = await getLoanAsLender(ctx, loanId);
-    assertStatus(loan, "approved");
     await transition(ctx, loan, "returned");
   },
 });
@@ -142,17 +134,6 @@ export const listAll = query({
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-// Single place where a loan changes status, so side effects (n8n
-// notifications, Phase 4) hook in here and can't be forgotten by a caller.
-async function transition(ctx: MutationCtx, loan: Doc<"loans">, to: LoanStatus) {
-  const now = Date.now();
-  await ctx.db.patch(loan._id, {
-    status: to,
-    ...(to === "approved" || to === "declined" ? { decidedAt: now } : {}),
-    ...(to === "returned" ? { returnedAt: now } : {}),
-  });
-}
-
 // Loads a loan and checks the caller is its lender. Admins can view all loans
 // but deliberately cannot act on someone else's.
 async function getLoanAsLender(ctx: MutationCtx, loanId: Id<"loans">) {
@@ -163,12 +144,6 @@ async function getLoanAsLender(ctx: MutationCtx, loanId: Id<"loans">) {
     throw appError("FORBIDDEN", "Only the owner of the tool can do this.");
   }
   return loan;
-}
-
-function assertStatus(loan: Doc<"loans">, expected: LoanStatus) {
-  if (loan.status !== expected) {
-    throw appError("CONFLICT", `This request is ${loan.status}, not ${expected}.`);
-  }
 }
 
 // What the UI gets for a loan: names only, never the other party's email.

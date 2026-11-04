@@ -108,7 +108,7 @@ function ListingRow({ tool }: { tool: Listing }) {
           Edit
         </Button>
         <ConfirmButton
-          prompt="Delete? Pending requests will be declined."
+          prompt="Delete? Open requests will be cancelled."
           onConfirm={() => run(() => remove({ toolId: tool._id }))}
           disabled={pending}
         >

@@ -123,7 +123,7 @@ describe("tools.remove", () => {
     expect(await alice.as.query(api.tools.myListings, {})).toHaveLength(0);
   });
 
-  test("owner cannot remove a lent-out tool, and removal declines pending requests", async () => {
+  test("owner cannot remove a lent-out tool, and removal cancels pending requests", async () => {
     const t = setup();
     const alice = await signIn(t, "alice");
     const bob = await signIn(t, "bob");
@@ -141,7 +141,37 @@ describe("tools.remove", () => {
     await alice.as.mutation(api.tools.remove, { toolId });
 
     const [carolRequest] = await carol.as.query(api.loans.myRequests, {});
-    expect(carolRequest.status).toBe("declined");
+    expect(carolRequest.status).toBe("cancelled");
     expect(carolRequest.tool.removed).toBe(true);
+  });
+
+  test("removal cancels approved loans that haven't started", async () => {
+    const t = setup();
+    const alice = await signIn(t, "alice");
+    const bob = await signIn(t, "bob");
+    const toolId = await createTool(alice);
+    const loanId = await requestLoan(bob, toolId, 5, 6);
+    await alice.as.mutation(api.loans.approve, { loanId });
+
+    await alice.as.mutation(api.tools.remove, { toolId });
+
+    const [loan] = await bob.as.query(api.loans.myRequests, {});
+    expect(loan.status).toBe("cancelled");
+  });
+
+  test("admin removal keeps a loan under way so it can be returned", async () => {
+    const t = setup();
+    const alice = await signIn(t, "alice");
+    const bob = await signIn(t, "bob");
+    const admin = await signIn(t, "admin", { email: ADMIN_EMAIL });
+    const toolId = await createTool(alice);
+    const loanId = await requestLoan(bob, toolId, 0, 1);
+    await alice.as.mutation(api.loans.approve, { loanId });
+
+    await admin.as.mutation(api.tools.remove, { toolId });
+    await alice.as.mutation(api.loans.markReturned, { loanId });
+
+    const [loan] = await bob.as.query(api.loans.myRequests, {});
+    expect(loan.status).toBe("returned");
   });
 });

@@ -2,9 +2,10 @@ import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import { requireUser } from "./lib/auth";
-import { availabilityOf, getApprovedLoans } from "./lib/availability";
+import { availabilityOf, getLoans } from "./lib/availability";
 import { todayIso } from "./lib/dates";
 import { appError } from "./lib/errors";
+import { cancelLoansOfRemovedTool } from "./lib/lifecycle";
 import { LIMITS, vCategory, vCondition } from "./lib/validators";
 
 // ── Queries ─────────────────────────────────────────────────────────
@@ -19,7 +20,7 @@ export const listPublic = query({
     const result = [];
     for (const tool of tools) {
       if (tool.removedAt) continue;
-      if (availabilityOf(await getApprovedLoans(ctx, tool._id), today) !== "available") continue;
+      if (availabilityOf(await getLoans(ctx, tool._id, "approved"), today) !== "available") continue;
       result.push({ _id: tool._id, name: tool.name, category: tool.category });
     }
     return result;
@@ -44,7 +45,7 @@ export const list = query({
     const result = [];
     for (const tool of tools) {
       if (tool.removedAt) continue;
-      const approved = await getApprovedLoans(ctx, tool._id);
+      const approved = await getLoans(ctx, tool._id, "approved");
       const owner = await ctx.db.get(tool.ownerId);
       result.push({
         ...publicFields(tool),
@@ -78,7 +79,7 @@ export const myListings = query({
       if (tool.removedAt) continue;
       result.push({
         ...publicFields(tool),
-        availability: availabilityOf(await getApprovedLoans(ctx, tool._id), today),
+        availability: availabilityOf(await getLoans(ctx, tool._id, "approved"), today),
       });
     }
     return result;
@@ -115,9 +116,6 @@ export const update = mutation({
   },
 });
 
-// Owner or admin. Pending requests on the tool are declined. An owner cannot
-// remove a tool that is currently lent out; an admin can (moderation), and the
-// approved loans are kept as-is so they can still be tracked and returned.
 export const remove = mutation({
   args: { toolId: v.id("tools") },
   handler: async (ctx, { toolId }) => {
@@ -129,20 +127,14 @@ export const remove = mutation({
       throw appError("FORBIDDEN", "You can only remove your own listings.");
     }
 
-    if (!isAdmin && availabilityOf(await getApprovedLoans(ctx, toolId)) === "on_loan") {
+    const today = todayIso();
+    if (!isAdmin && availabilityOf(await getLoans(ctx, toolId, "approved"), today) === "on_loan") {
       throw appError("CONFLICT", "This tool is lent out. Mark it returned before removing it.");
     }
 
-    const now = Date.now();
-    const pending = await ctx.db
-      .query("loans")
-      .withIndex("by_tool_status", (q) => q.eq("toolId", toolId).eq("status", "pending"))
-      .collect();
-    for (const loan of pending) {
-      await ctx.db.patch(loan._id, { status: "declined", decidedAt: now });
-    }
+    await cancelLoansOfRemovedTool(ctx, toolId, today);
 
-    await ctx.db.patch(toolId, { removedAt: now, removedBy: me._id });
+    await ctx.db.patch(toolId, { removedAt: Date.now(), removedBy: me._id });
   },
 });
 

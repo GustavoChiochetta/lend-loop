@@ -19,8 +19,7 @@ export const CONDITIONS = ["new", "good", "fair", "worn"] as const;
 
 export const ROLES = ["user", "admin"] as const;
 
-// Lifecycle: pending -> approved | declined; approved -> returned.
-export const LOAN_STATUSES = ["pending", "approved", "declined", "returned"] as const;
+export const LOAN_STATUSES = ["pending", "approved", "declined", "returned", "cancelled"] as const;
 
 export const AUTOMATION_EVENT_TYPES = [
   "request_notification",
