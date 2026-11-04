@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as automation from "../automation.js";
+import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_availability from "../lib/availability.js";
 import type * as lib_contacts from "../lib/contacts.js";
@@ -30,6 +32,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  automation: typeof automation;
+  http: typeof http;
   "lib/auth": typeof lib_auth;
   "lib/availability": typeof lib_availability;
   "lib/contacts": typeof lib_contacts;

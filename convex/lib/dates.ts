@@ -17,11 +17,19 @@ export function addDays(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// The round-trip rejects impossible dates such as 2026-02-31.
+export function isIsoDate(value: string): boolean {
+  return ISO_DATE.test(value) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+}
+
 export function assertIsoDate(value: string, field: string): void {
-  // The round-trip rejects impossible dates such as 2026-02-31.
-  if (!ISO_DATE.test(value) || new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) !== value) {
+  if (!isIsoDate(value)) {
     throw appError("INVALID_INPUT", `${field} must be a valid date (YYYY-MM-DD).`);
   }
+}
+
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
 
 // Inclusive ranges: a loan ending on the 5th blocks another starting on the 5th.
