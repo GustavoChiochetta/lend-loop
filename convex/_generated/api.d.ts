@@ -10,12 +10,15 @@
 
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_availability from "../lib/availability.js";
+import type * as lib_contacts from "../lib/contacts.js";
 import type * as lib_dates from "../lib/dates.js";
 import type * as lib_errors from "../lib/errors.js";
+import type * as lib_events from "../lib/events.js";
 import type * as lib_hmac from "../lib/hmac.js";
 import type * as lib_lifecycle from "../lib/lifecycle.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as loans from "../loans.js";
+import type * as notifications from "../notifications.js";
 import type * as seed from "../seed.js";
 import type * as tools from "../tools.js";
 import type * as users from "../users.js";
@@ -29,12 +32,15 @@ import type {
 declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/availability": typeof lib_availability;
+  "lib/contacts": typeof lib_contacts;
   "lib/dates": typeof lib_dates;
   "lib/errors": typeof lib_errors;
+  "lib/events": typeof lib_events;
   "lib/hmac": typeof lib_hmac;
   "lib/lifecycle": typeof lib_lifecycle;
   "lib/validators": typeof lib_validators;
   loans: typeof loans;
+  notifications: typeof notifications;
   seed: typeof seed;
   tools: typeof tools;
   users: typeof users;

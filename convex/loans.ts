@@ -5,7 +5,7 @@ import { requireAdmin, requireUser } from "./lib/auth";
 import { getLoans } from "./lib/availability";
 import { addDays, assertIsoDate, MAX_LOAN_DAYS, rangesOverlap, todayIso } from "./lib/dates";
 import { appError } from "./lib/errors";
-import { transition } from "./lib/lifecycle";
+import { openLoan, transition } from "./lib/lifecycle";
 
 // ── Mutations ───────────────────────────────────────────────────────
 
@@ -42,14 +42,7 @@ export const request = mutation({
       throw appError("CONFLICT", "You already have a pending request for those dates.");
     }
 
-    return await ctx.db.insert("loans", {
-      toolId,
-      borrowerId: me._id,
-      lenderId: tool.ownerId,
-      startDate,
-      endDate,
-      status: "pending",
-    });
+    return await openLoan(ctx, { toolId, borrowerId: me._id, lenderId: tool.ownerId, startDate, endDate });
   },
 });
 

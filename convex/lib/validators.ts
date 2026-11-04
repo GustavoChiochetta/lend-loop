@@ -44,9 +44,15 @@ export type Condition = Infer<typeof vCondition>;
 export type Role = Infer<typeof vRole>;
 export type LoanStatus = Infer<typeof vLoanStatus>;
 export type AutomationEventType = Infer<typeof vAutomationEventType>;
+export type AutomationEventStatus = Infer<typeof vAutomationEventStatus>;
+
+export function isAutomationEventStatus(value: unknown): value is AutomationEventStatus {
+  return AUTOMATION_EVENT_STATUSES.some((status) => status === value);
+}
 
 // Text limits, enforced in mutations (Phase 2).
 export const LIMITS = {
   toolName: 80,
   toolDescription: 500,
+  automationDetail: 500,
 } as const;
