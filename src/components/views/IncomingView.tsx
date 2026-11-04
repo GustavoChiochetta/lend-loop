@@ -12,7 +12,7 @@ export function IncomingView() {
 
   const pending = loans.filter((l) => l.status === "pending");
   const active = loans.filter((l) => l.status === "approved");
-  const history = loans.filter((l) => l.status === "declined" || l.status === "returned");
+  const history = loans.filter((l) => l.status !== "pending" && l.status !== "approved");
 
   return (
     <>

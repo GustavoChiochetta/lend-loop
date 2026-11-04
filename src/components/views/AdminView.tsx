@@ -33,7 +33,7 @@ function AdminDashboard() {
   const visibleLoans = loans.filter((loan) =>
     filter === "all" ? true : filter === "overdue" ? loan.isOverdue : loan.status === filter,
   );
-  const filters: LoanFilter[] = ["all", "pending", "approved", "overdue", "returned", "declined"];
+  const filters: LoanFilter[] = ["all", "pending", "approved", "overdue", "returned", "declined", "cancelled"];
 
   return (
     <>

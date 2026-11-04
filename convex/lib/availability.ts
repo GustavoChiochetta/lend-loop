@@ -1,20 +1,21 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
+import type { LoanStatus } from "./validators";
 import { todayIso } from "./dates";
 
 export type Availability = "available" | "on_loan";
 
-// Approved loans are the only ones that block a tool: pending requests are
-// just intents, and declined/returned loans are history.
-export async function getApprovedLoans(ctx: QueryCtx, toolId: Id<"tools">) {
+export async function getLoans(ctx: QueryCtx, toolId: Id<"tools">, status: LoanStatus) {
   return await ctx.db
     .query("loans")
-    .withIndex("by_tool_status", (q) => q.eq("toolId", toolId).eq("status", "approved"))
+    .withIndex("by_tool_status", (q) => q.eq("toolId", toolId).eq("status", status))
     .collect();
 }
 
-// A tool is "on loan" once an approved loan has started and until the lender
-// marks it returned (even past endDate: an overdue tool is still not home).
+export function hasStarted(loan: Doc<"loans">, today: string): boolean {
+  return loan.startDate <= today;
+}
+
 export function availabilityOf(approved: Doc<"loans">[], today = todayIso()): Availability {
-  return approved.some((loan) => loan.startDate <= today) ? "on_loan" : "available";
+  return approved.some((loan) => hasStarted(loan, today)) ? "on_loan" : "available";
 }

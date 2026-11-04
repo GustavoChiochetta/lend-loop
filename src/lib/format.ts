@@ -24,6 +24,7 @@ export const STATUS_LABELS: Record<LoanStatus, string> = {
   approved: "Approved",
   declined: "Declined",
   returned: "Returned",
+  cancelled: "Cancelled",
 };
 
 // Loan dates are UTC calendar days ("YYYY-MM-DD"); format them in UTC too

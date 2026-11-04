@@ -88,6 +88,15 @@ describe("approve / decline / markReturned", () => {
     await expect(alice.as.mutation(api.loans.approve, { loanId })).rejects.toMatchObject(
       withCode("CONFLICT"),
     );
+
+    const approvedId = await requestLoan(bob, toolId, 1, 2);
+    await alice.as.mutation(api.loans.approve, { loanId: approvedId });
+    await expect(alice.as.mutation(api.loans.decline, { loanId: approvedId })).rejects.toMatchObject(
+      withCode("CONFLICT"),
+    );
+    await expect(alice.as.mutation(api.loans.approve, { loanId: approvedId })).rejects.toThrow(
+      /approved and can't become approved/,
+    );
   });
 
   test("approving declines overlapping pending requests only", async () => {
@@ -134,5 +143,7 @@ describe("loan views", () => {
 
     const [view] = await bob.as.query(api.loans.myRequests, {});
     expect(view.isOverdue).toBe(true);
+    const [tool] = await alice.as.query(api.tools.myListings, {});
+    expect(tool.availability).toBe("on_loan");
   });
 });
