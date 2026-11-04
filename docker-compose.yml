@@ -1,0 +1,32 @@
+services:
+  n8n:
+    image: n8nio/n8n:2.44.3
+    ports:
+      - "5678:5678"
+    env_file:
+      - path: .env.n8n
+        required: true
+    environment:
+      GENERIC_TIMEZONE: UTC
+      TZ: UTC
+      # Workflows read N8N_HMAC_SECRET / CONVEX_SITE_URL via $env and sign with node:crypto.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      NODE_FUNCTION_ALLOW_BUILTIN: crypto
+    extra_hosts:
+      # Lets the container reach the local Convex backend on the host (Linux too).
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - mailpit
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.31.0
+    ports:
+      - "1025:1025" # SMTP (n8n uses mailpit:1025)
+      - "8025:8025" # web UI
+    restart: unless-stopped
+
+volumes:
+  n8n_data:

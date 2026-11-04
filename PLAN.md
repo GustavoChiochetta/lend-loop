@@ -63,12 +63,12 @@ Marque `[x]` conforme cada item for concluído. Cada fase termina com um checkpo
 - [x] ✅ Checkpoint: fluxo testado no navegador (listar, pedir, aprovar, erro de conflito, admin, mobile)
 
 ## Fase 4 — Integração Convex ↔ n8n
-- [ ] `docker-compose.yml`: n8n + Mailpit (com volume persistente)
-- [ ] Utilitário HMAC no Convex (assinar e verificar, comparação em tempo constante, janela de timestamp)
-- [ ] Action `notifications.send`, disparada ao criar um pedido e a cada mudança de status
-- [ ] HTTP action `GET /overdue-loans` (assinada, retorna dados mínimos)
-- [ ] HTTP action `POST /reminder-status` (assinada, idempotente)
-- [ ] Registro em `automationEvents` (enviado, falhou, lembrete)
+- [x] `docker-compose.yml`: n8n + Mailpit (com volume persistente)
+- [x] Utilitário HMAC no Convex (assinar e verificar, comparação em tempo constante, janela de timestamp)
+- [x] Action `notifications.send`, disparada ao criar um pedido e a cada mudança de status
+- [x] HTTP action `GET /overdue-loans` (assinada, retorna dados mínimos)
+- [x] HTTP action `POST /reminder-status` (assinada, idempotente)
+- [x] Registro em `automationEvents` (enviado, falhou, lembrete)
 
 ## Fase 5 — Workflows n8n
 - [ ] **WF1 Request Notification**: Webhook → verifica HMAC → Switch por status → e-mail (Mailpit) → resposta
