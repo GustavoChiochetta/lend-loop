@@ -93,6 +93,33 @@ describe("request notification", () => {
     expect(await events(t, loanId)).toMatchObject([{ status: "failed", detail: "n8n responded 500" }]);
   });
 
+  test("records the reason n8n gives for a failed email", async () => {
+    const { t, toolId, bob } = await world();
+    const reason = (text: string) => Response.json({ error: text }, { status: 502 });
+    fetchMock.mockResolvedValueOnce(reason("Email not sent: connect ECONNREFUSED 172.24.0.2:1025"));
+    const first = await requestLoan(bob, toolId, 1, 3);
+    await flush(t);
+    expect(await events(t, first)).toMatchObject([
+      { status: "failed", detail: "n8n responded 502: Email not sent: connect ECONNREFUSED 172.24.0.2:1025" },
+    ]);
+
+    fetchMock.mockResolvedValueOnce(reason("x".repeat(600)));
+    const second = await requestLoan(bob, toolId, 5, 6);
+    await flush(t);
+    const [event] = await events(t, second);
+    expect(event.detail).toHaveLength(500);
+    expect(event.detail?.startsWith("n8n responded 502: xxx")).toBe(true);
+  });
+
+  test("says so when n8n does not answer in time", async () => {
+    const { t, toolId, bob } = await world();
+    fetchMock.mockRejectedValueOnce(new DOMException("The signal has been aborted", "TimeoutError"));
+    const loanId = await requestLoan(bob, toolId, 1, 3);
+    await flush(t);
+
+    expect(await events(t, loanId)).toMatchObject([{ status: "failed", detail: "n8n did not answer within 30s" }]);
+  });
+
   test("records network errors and missing configuration as failures", async () => {
     const { t, toolId, bob } = await world();
     fetchMock.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
