@@ -1,0 +1,120 @@
+{
+  "id": "wf3ErrorAlerting",
+  "name": "Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "wf3-error-trigger",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.MAIL_FROM }}",
+        "toEmail": "={{ $env.ADMIN_ALERT_EMAIL }}",
+        "subject": "=LendLoop workflow failed: {{ $json.workflow.name }}",
+        "emailFormat": "text",
+        "text": "=Workflow: {{ $json.workflow.name }}\nNode: {{ $json.execution?.lastNodeExecuted ?? 'trigger' }}\nError: {{ $json.execution?.error?.message ?? $json.trigger?.error?.message ?? 'unknown error' }}\nExecution: {{ $json.execution?.url ?? 'none' }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        -120
+      ],
+      "id": "wf3-alert-admin",
+      "name": "Alert admin",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "smtp": {
+          "id": "mailpitSmtp00001",
+          "name": "Mailpit SMTP"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require(\"crypto\");\n\n// A failure inside a trigger arrives as { trigger, workflow } with no execution.\nconst { execution, trigger, workflow } = $input.first().json;\nconst ts = Math.floor(Date.now() / 1000).toString();\nconst report = {\n  executionId: String(execution?.id ?? `trigger-${workflow.id}-${ts}`),\n  workflow: workflow.name,\n  node: execution?.lastNodeExecuted,\n  message: String(execution?.error?.message ?? trigger?.error?.message ?? \"unknown error\").slice(0, 500),\n};\n\nconst path = \"/workflow-error\";\nconst body = JSON.stringify(report);\nconst signature = crypto.createHmac(\"sha256\", $env.N8N_HMAC_SECRET).update(`${ts}\\nPOST\\n${path}\\n${body}`).digest(\"hex\");\nreturn [{ json: { body, headers: { \"X-LendLoop-Timestamp\": ts, \"X-LendLoop-Signature\": `sha256=${signature}` } } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        120
+      ],
+      "id": "wf3-sign-post",
+      "name": "Sign POST"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_SITE_URL }}/workflow-error",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($json.headers) }}",
+        "options": {
+          "timeout": 10000
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        120
+      ],
+      "id": "wf3-record-error",
+      "name": "Record error",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Alert admin",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sign POST",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign POST": {
+      "main": [
+        [
+          {
+            "node": "Record error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

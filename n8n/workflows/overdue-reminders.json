@@ -350,6 +350,7 @@
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "errorWorkflow": "wf3ErrorAlerting"
   }
 }
