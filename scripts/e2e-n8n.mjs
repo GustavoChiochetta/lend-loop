@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// End-to-end check of the Phase 5 workflows against the local stack:
+// End-to-end check of the n8n workflows against the local stack:
 // Convex (`npx convex dev`), n8n and Mailpit (`docker compose up -d`).
 // Run through `npm run e2e:n8n`, which loads .env.n8n.
 import { execFileSync } from "node:child_process";
