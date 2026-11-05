@@ -10,7 +10,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p convex",
-    "sign": "node --experimental-strip-types --no-warnings --env-file=.env.n8n scripts/sign-request.mjs"
+    "sign": "node --experimental-strip-types --no-warnings --env-file=.env.n8n scripts/sign-request.mjs",
+    "n8n:setup": "sh scripts/n8n-setup.sh",
+    "n8n:export": "node scripts/n8n-export.mjs",
+    "e2e:n8n": "node --experimental-strip-types --no-warnings --env-file=.env.n8n scripts/e2e-n8n.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.23",

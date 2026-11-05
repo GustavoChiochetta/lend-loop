@@ -3,7 +3,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { loanContact } from "./lib/contacts";
 import { daysBetween } from "./lib/dates";
 import { recordEvent, wasSent } from "./lib/events";
-import { vAutomationEventStatus } from "./lib/validators";
+import { LIMITS, vAutomationEventStatus } from "./lib/validators";
 
 // Approved loans past their end date that haven't had a reminder sent today,
 // so n8n can rerun the daily workflow without emailing anyone twice.
@@ -45,5 +45,22 @@ export const recordReminder = internalMutation({
     if (!loanId || !(await ctx.db.get(loanId))) return false;
     await recordEvent(ctx, { kind: "reminder", loanId, date }, status, detail);
     return true;
+  },
+});
+
+// An error report must never be lost, so a loanId that doesn't resolve is dropped, not rejected.
+export const recordWorkflowError = internalMutation({
+  args: {
+    executionId: v.string(),
+    workflow: v.string(),
+    node: v.optional(v.string()),
+    message: v.string(),
+    loanId: v.optional(v.string()),
+  },
+  handler: async (ctx, { executionId, workflow, node, message, loanId: rawId }) => {
+    const id = rawId === undefined ? null : ctx.db.normalizeId("loans", rawId);
+    const loanId = id && (await ctx.db.get(id)) ? id : undefined;
+    const detail = `${node === undefined ? workflow : `${workflow} / ${node}`}: ${message}`;
+    await recordEvent(ctx, { kind: "error", executionId, loanId }, "failed", detail.slice(0, LIMITS.automationDetail));
   },
 });

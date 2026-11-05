@@ -5,9 +5,10 @@ import { internalAction, internalMutation, internalQuery } from "./_generated/se
 import { loanContact } from "./lib/contacts";
 import { recordEvent, wasSent } from "./lib/events";
 import { signedHeaders } from "./lib/hmac";
-import { vAutomationEventStatus, vLoanStatus, type LoanStatus } from "./lib/validators";
+import { LIMITS, vAutomationEventStatus, vLoanStatus, type LoanStatus } from "./lib/validators";
 
-const TIMEOUT_MS = 10_000;
+// n8n answers only after its email node has given up: three SMTP tries with 2s waits.
+const TIMEOUT_MS = 30_000;
 
 type NotificationEvent = "loan.requested" | "loan.status_changed";
 
@@ -69,9 +70,23 @@ async function deliver(body: NotificationPayload): Promise<string | undefined> {
       body: json,
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    return res.ok ? undefined : `n8n responded ${res.status}`;
+    if (res.ok) return undefined;
+    const reason = await n8nReason(res);
+    return (reason ? `n8n responded ${res.status}: ${reason}` : `n8n responded ${res.status}`).slice(0, LIMITS.automationDetail);
   } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") return `n8n did not answer within ${TIMEOUT_MS / 1000}s`;
     return error instanceof Error ? error.message : String(error);
+  }
+}
+
+// WF1 answers a failed email with { "error": "<why>" }; any other body carries no reason.
+async function n8nReason(res: Response): Promise<string | undefined> {
+  try {
+    const body: unknown = await res.json();
+    const error = (body as { error?: unknown } | null)?.error;
+    return typeof error === "string" ? error : undefined;
+  } catch {
+    return undefined;
   }
 }
 

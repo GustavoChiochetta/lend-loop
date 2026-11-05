@@ -155,3 +155,106 @@ describe("POST /reminder-status", () => {
     expect((await (await getOverdue(t)).json()).loans).toHaveLength(0);
   });
 });
+
+describe("POST /workflow-error", () => {
+  async function postError(t: T, body: unknown) {
+    const raw = typeof body === "string" ? body : JSON.stringify(body);
+    return await t.fetch("/workflow-error", {
+      method: "POST",
+      headers: await signedHeaders(SECRET, "POST", "/workflow-error", raw),
+      body: raw,
+    });
+  }
+
+  async function errors(t: T) {
+    return await t.run((ctx) =>
+      ctx.db
+        .query("automationEvents")
+        .filter((q) => q.eq(q.field("type"), "workflow_error"))
+        .collect(),
+    );
+  }
+
+  const valid = { executionId: "exec-1", workflow: "Overdue reminders", node: "Send email", message: "SMTP down" };
+
+  test("rejects unsigned and forged requests", async () => {
+    const { t } = await world();
+    const raw = JSON.stringify(valid);
+    expect((await t.fetch("/workflow-error", { method: "POST", body: raw })).status).toBe(401);
+    const forged = await signedHeaders(SECRET, "POST", "/workflow-error", raw);
+    const tampered = JSON.stringify({ ...valid, message: "other" });
+    expect((await t.fetch("/workflow-error", { method: "POST", headers: forged, body: tampered })).status).toBe(401);
+    expect(await errors(t)).toHaveLength(0);
+  });
+
+  test("rejects malformed bodies", async () => {
+    const { t } = await world();
+    for (const body of [
+      "not json",
+      "null",
+      "42",
+      { ...valid, executionId: undefined },
+      { ...valid, workflow: undefined },
+      { ...valid, message: undefined },
+      { ...valid, executionId: "" },
+      { ...valid, executionId: 1 },
+      { ...valid, executionId: "x".repeat(101) },
+      { ...valid, workflow: "" },
+      { ...valid, workflow: 1 },
+      { ...valid, message: 1 },
+      { ...valid, message: "x".repeat(501) },
+      { ...valid, node: 1 },
+      { ...valid, loanId: 1 },
+    ]) {
+      expect((await postError(t, body)).status, JSON.stringify(body)).toBe(400);
+    }
+    expect(await errors(t)).toHaveLength(0);
+
+    expect((await postError(t, { ...valid, message: "x".repeat(500) })).status).toBe(200);
+    expect(await errors(t)).toHaveLength(1);
+  });
+
+  test("stores one failed row per execution, and a repeat keeps it", async () => {
+    const { t } = await world();
+    for (let i = 0; i < 2; i++) {
+      const res = await postError(t, valid);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true });
+    }
+    expect(await errors(t)).toMatchObject([
+      {
+        status: "failed",
+        idempotencyKey: "error:exec-1",
+        detail: "Overdue reminders / Send email: SMTP down",
+      },
+    ]);
+  });
+
+  test("leaves the node out of the detail when it isn't given", async () => {
+    const { t } = await world();
+    expect((await postError(t, { ...valid, node: undefined })).status).toBe(200);
+    expect(await errors(t)).toMatchObject([{ detail: "Overdue reminders: SMTP down" }]);
+  });
+
+  test("links an existing loan and drops a loanId that doesn't resolve", async () => {
+    const { t, loan } = await world();
+    const loanId = await loan("approved", day(-5), day(-3));
+    const deletedLoan = await loan("approved", day(-5), day(-3));
+    await t.run((ctx) => ctx.db.delete(deletedLoan));
+
+    expect((await postError(t, { ...valid, executionId: "linked", loanId })).status).toBe(200);
+    expect((await postError(t, { ...valid, executionId: "malformed", loanId: "nope" })).status).toBe(200);
+    expect((await postError(t, { ...valid, executionId: "deleted", loanId: deletedLoan })).status).toBe(200);
+
+    const byKey = Object.fromEntries((await errors(t)).map((e) => [e.idempotencyKey, e.loanId]));
+    expect(byKey).toEqual({ "error:linked": loanId, "error:malformed": undefined, "error:deleted": undefined });
+  });
+
+  test("cuts a detail longer than the limit", async () => {
+    const { t } = await world();
+    expect((await postError(t, { ...valid, workflow: "w".repeat(600) })).status).toBe(200);
+    const [row] = await errors(t);
+    expect(row.detail).toHaveLength(500);
+    expect(row.detail).toBe("w".repeat(500));
+  });
+});

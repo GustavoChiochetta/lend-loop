@@ -55,4 +55,5 @@ export const LIMITS = {
   toolName: 80,
   toolDescription: 500,
   automationDetail: 500,
+  executionId: 100,
 } as const;

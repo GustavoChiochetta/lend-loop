@@ -49,3 +49,7 @@ next-env.d.ts
 
 # local Claude Code preview config (machine-specific paths)
 .claude/
+
+# personal working notes: execution plan and feature specs
+/PLAN.md
+/docs/specs/
