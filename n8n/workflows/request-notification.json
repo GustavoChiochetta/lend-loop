@@ -1,0 +1,241 @@
+{
+  "id": "wf1RequestNotify",
+  "name": "Request Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "loan-notification",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "wf1-webhook",
+      "name": "Webhook",
+      "webhookId": "2eeefd11-03c1-439a-b269-b8b573c7b996"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require(\"crypto\");\n\nconst PATH = \"/webhook/loan-notification\";\nconst MAX_SKEW_SECONDS = 300;\n\n// One entry per loan status Convex sends; anything else is a bad request.\nconst TEMPLATES = {\n  pending: (tool) => [`New request for your ${tool}`, `Someone asked to borrow your ${tool}. Open LendLoop to approve or decline the request.`],\n  approved: (tool) => [`Your request for ${tool} was approved`, `Your request to borrow ${tool} was approved.`],\n  declined: (tool) => [`Your request for ${tool} was declined`, `Your request to borrow ${tool} was declined.`],\n  cancelled: (tool) => [`Your request for ${tool} was cancelled`, `Your request to borrow ${tool} was cancelled because the tool is no longer listed.`],\n  returned: (tool) => [`Return of ${tool} confirmed`, `The owner confirmed that ${tool} was returned. Thanks for borrowing on LendLoop.`],\n};\n\nconst headers = $input.first().json.headers;\nconst body = (await this.helpers.getBinaryDataBuffer(0, \"data\")).toString(\"utf8\");\n\nfunction isSigned() {\n  const secret = $env.N8N_HMAC_SECRET;\n  const ts = headers[\"x-lendloop-timestamp\"];\n  const signature = headers[\"x-lendloop-signature\"];\n  if (!secret || !/^\\d+$/.test(ts ?? \"\") || !/^sha256=[0-9a-f]{64}$/.test(signature ?? \"\")) return false;\n  if (Math.abs(Date.now() / 1000 - Number(ts)) > MAX_SKEW_SECONDS) return false;\n  const expected = crypto.createHmac(\"sha256\", secret).update(`${ts}\\nPOST\\n${PATH}\\n${body}`).digest();\n  return crypto.timingSafeEqual(Buffer.from(signature.slice(7), \"hex\"), expected);\n}\n\nif (!isSigned()) return [{ json: { outcome: \"unauthorized\" } }];\n\nlet event;\ntry {\n  event = JSON.parse(body);\n} catch {\n  return [{ json: { outcome: \"bad_request\" } }];\n}\nconst template = TEMPLATES[event?.status];\nconst to = event?.recipient?.email;\nconst tool = event?.tool?.name;\nif (!template || typeof to !== \"string\" || typeof tool !== \"string\") return [{ json: { outcome: \"bad_request\" } }];\n\nconst [subject, line] = template(tool);\nconst greeting = event.recipient.name ? `Hi ${event.recipient.name},` : \"Hi,\";\nconst text = `${greeting}\\n\\n${line}\\n\\nDates: ${event.startDate} to ${event.endDate}.\\n\\nLendLoop`;\nreturn [{ json: { outcome: \"send\", to, subject, text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "wf1-verify",
+      "name": "Verify and render"
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 3,
+        "output": "={{ ({ send: 0, unauthorized: 1, bad_request: 2 })[$json.outcome] }}"
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "wf1-route",
+      "name": "Route"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.MAIL_FROM }}",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        660,
+        -160
+      ],
+      "id": "wf1-send-email",
+      "name": "Send Email",
+      "credentials": {
+        "smtp": {
+          "id": "mailpitSmtp00001",
+          "name": "Mailpit SMTP"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        -160
+      ],
+      "id": "wf1-respond-ok",
+      "name": "Respond OK"
+    },
+    {
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        160
+      ],
+      "id": "wf1-respond-401",
+      "name": "Respond 401"
+    },
+    {
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        320
+      ],
+      "id": "wf1-respond-400",
+      "name": "Respond 400"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'Email not sent: ' + $json.error }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        0
+      ],
+      "id": "wf1-respond-502",
+      "name": "Respond 502"
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'Email not sent: ' + $('Send Email').item.json.error }}"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "wf1-fail-execution",
+      "name": "Fail execution"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify and render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify and render": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 400",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 502",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 502": {
+      "main": [
+        [
+          {
+            "node": "Fail execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
