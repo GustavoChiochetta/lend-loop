@@ -1,5 +1,7 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+For how the app, Convex and the n8n workflows connect, see [docs/architecture.md](docs/architecture.md).
+
 ## Getting Started
 
 First, run the development server:
@@ -55,10 +57,75 @@ npx convex env set N8N_WEBHOOK_URL http://localhost:5678/webhook/loan-notificati
 docker compose up -d   # n8n on :5678, Mailpit UI on :8025
 ```
 
-Until the Phase 5 workflows exist, a published n8n workflow with a single Webhook node (`POST`, path `loan-notification`) is enough to see each notification under Executions. Every attempt is also recorded in the `automationEvents` table.
+Every attempt is recorded in the `automationEvents` table.
 
 Try the Convex endpoints without n8n (Node 22, reads `.env.n8n`):
 
 ```bash
 eval "$(npm run -s sign -- GET /overdue-loans)"
 ```
+
+## n8n workflows (Phase 5)
+
+Three workflows send every email. They live in `n8n/workflows/` as JSON. [docs/architecture.md](docs/architecture.md) has the diagrams and the reasons behind each choice.
+
+| Workflow | Starts on | Does |
+|---|---|---|
+| WF1 Request Notification | Signed `POST /webhook/loan-notification` from Convex | Emails the lender about a new request and the borrower about every decision. Answers 401 to a bad signature and 502 with the reason when the email fails. |
+| WF2 Overdue Reminders | Every day at 09:00 UTC, or a signed `POST /webhook/overdue-run` | Asks Convex for overdue loans, emails each borrower, and reports each result back. Sends at most one reminder per loan per day. |
+| WF3 Error Handler | Any failed WF1 or WF2 execution | Emails `ADMIN_ALERT_EMAIL` and records a `workflow_error` row in Convex. |
+
+### Setup
+
+1. Add the two Phase 5 values to `.env.n8n`, next to the Phase 4 ones:
+
+   ```bash
+   printf 'ADMIN_ALERT_EMAIL=admin@lendloop.test\nMAIL_FROM="LendLoop <no-reply@lendloop.test>"\n' >> .env.n8n
+   ```
+
+2. Start n8n and Mailpit, then open http://localhost:5678 once and create the n8n owner account. The account is local to the Docker volume.
+
+   ```bash
+   docker compose up -d
+   ```
+
+3. Load the workflows. The script creates the Mailpit SMTP credential, imports the three workflows, publishes them and restarts n8n. It is safe to rerun after any change to `n8n/workflows/`.
+
+   ```bash
+   npm run n8n:setup
+   ```
+
+4. Check everything end to end. `npx convex dev` must be running.
+
+   ```bash
+   npm run e2e:n8n
+   ```
+
+   It prints one `PASS` or `FAIL` line per step and stops at the first failure. Emails show up at http://localhost:8025.
+
+To make WF2 send a reminder right away, create an overdue loan and trigger the run:
+
+```bash
+npx convex run seed:overdue
+```
+
+```bash
+eval "$(npm run -s sign -- POST /webhook/overdue-run '{}' | sed 's#127.0.0.1:3211#localhost:5678#')"
+```
+
+### Changing a workflow
+
+Edit it in the n8n editor, then write it back to git:
+
+```bash
+npm run n8n:export
+```
+
+The export keeps only `id`, `name`, `nodes`, `connections` and `settings`, because a raw export also carries the owner's name and email. `npm test` then checks every file for secrets, email addresses, missing retries and the signing format.
+
+### Things that surprised me
+
+- `n8n import:workflow` deactivates every workflow it imports, including ones it did not change. `npm run n8n:setup` publishes every workflow in `n8n/workflows/` again for that reason.
+- After a restart, the first request can still run the previous version of a workflow. A second request runs the new one.
+- Once, an import right after the files were written reported 0 workflows. Running it again worked.
+- With SMTP down, WF1 answers only after its three email tries, which took about 25 seconds. Convex waits up to 30 seconds before recording a timeout.
