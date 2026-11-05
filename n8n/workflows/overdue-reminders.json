@@ -1,0 +1,355 @@
+{
+  "id": "wf2OverdueRemind",
+  "name": "Overdue Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        -160
+      ],
+      "id": "wf2-daily",
+      "name": "Every day at 09:00 UTC"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "overdue-run",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        80
+      ],
+      "id": "wf2-webhook",
+      "name": "Run on demand",
+      "webhookId": "813df1c6-b11c-4839-8327-d162197fbb8b"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require(\"crypto\");\n\nconst PATH = \"/webhook/overdue-run\";\nconst MAX_SKEW_SECONDS = 300;\n\nconst headers = $input.first().json.headers;\nconst body = (await this.helpers.getBinaryDataBuffer(0, \"data\")).toString(\"utf8\");\n\nfunction isSigned() {\n  const secret = $env.N8N_HMAC_SECRET;\n  const ts = headers[\"x-lendloop-timestamp\"];\n  const signature = headers[\"x-lendloop-signature\"];\n  if (!secret || !/^\\d+$/.test(ts ?? \"\") || !/^sha256=[0-9a-f]{64}$/.test(signature ?? \"\")) return false;\n  if (Math.abs(Date.now() / 1000 - Number(ts)) > MAX_SKEW_SECONDS) return false;\n  const expected = crypto.createHmac(\"sha256\", secret).update(`${ts}\\nPOST\\n${PATH}\\n${body}`).digest();\n  return crypto.timingSafeEqual(Buffer.from(signature.slice(7), \"hex\"), expected);\n}\n\nreturn [{ json: { outcome: isSigned() ? \"run\" : \"unauthorized\" } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        80
+      ],
+      "id": "wf2-verify",
+      "name": "Verify signature"
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 2,
+        "output": "={{ ({ run: 0, unauthorized: 1 })[$json.outcome] }}"
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        440,
+        80
+      ],
+      "id": "wf2-route",
+      "name": "Route"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": true\n}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        0
+      ],
+      "id": "wf2-respond-202",
+      "name": "Respond 202"
+    },
+    {
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        200
+      ],
+      "id": "wf2-respond-401",
+      "name": "Respond 401"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require(\"crypto\");\n\nconst path = \"/overdue-loans\";\nconst body = \"\";\nconst ts = Math.floor(Date.now() / 1000).toString();\nconst signature = crypto.createHmac(\"sha256\", $env.N8N_HMAC_SECRET).update(`${ts}\\nGET\\n${path}\\n${body}`).digest(\"hex\");\nreturn [{ json: { headers: { \"X-LendLoop-Timestamp\": ts, \"X-LendLoop-Signature\": `sha256=${signature}` } } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -160
+      ],
+      "id": "wf2-sign-get",
+      "name": "Sign GET"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.CONVEX_SITE_URL }}/overdue-loans",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($json.headers) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -160
+      ],
+      "id": "wf2-get-overdue-loans",
+      "name": "Get overdue loans",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per overdue loan; n8n runs every later node once per item.\nconst { date, loans } = $input.first().json;\nreturn loans.map((loan) => {\n  const days = loan.daysOverdue === 1 ? \"1 day\" : `${loan.daysOverdue} days`;\n  const greeting = loan.borrower.name ? `Hi ${loan.borrower.name},` : \"Hi,\";\n  return {\n    json: {\n      loanId: loan.loanId,\n      date,\n      to: loan.borrower.email,\n      subject: `Reminder: please return ${loan.tool.name}`,\n      text: `${greeting}\\n\\n${loan.tool.name} was due back on ${loan.endDate}, ${days} ago. Please return it to its owner.\\n\\nLendLoop`,\n    },\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -160
+      ],
+      "id": "wf2-split",
+      "name": "Split loans"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.MAIL_FROM }}",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1540,
+        -160
+      ],
+      "id": "wf2-send-email",
+      "name": "Send reminder",
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "smtp": {
+          "id": "mailpitSmtp00001",
+          "name": "Mailpit SMTP"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const crypto = require(\"crypto\");\n\n// The email node's error output carries only { error }, so the loan comes from the paired item.\nconst loan = $(\"Split loans\").item.json;\nconst error = $json.error;\nconst report = error === undefined\n  ? { loanId: loan.loanId, date: loan.date, status: \"sent\" }\n  : { loanId: loan.loanId, date: loan.date, status: \"failed\", detail: String(error).slice(0, 500) };\n\nconst path = \"/reminder-status\";\nconst body = JSON.stringify(report);\nconst ts = Math.floor(Date.now() / 1000).toString();\nconst signature = crypto.createHmac(\"sha256\", $env.N8N_HMAC_SECRET).update(`${ts}\\nPOST\\n${path}\\n${body}`).digest(\"hex\");\nreturn { json: { body, headers: { \"X-LendLoop-Timestamp\": ts, \"X-LendLoop-Signature\": `sha256=${signature}` } } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -160
+      ],
+      "id": "wf2-sign-post",
+      "name": "Sign POST"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CONVEX_SITE_URL }}/reminder-status",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($json.headers) }}",
+        "options": {
+          "timeout": 10000
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        -160
+      ],
+      "id": "wf2-record-reminder",
+      "name": "Record reminder",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Every day at 09:00 UTC": {
+      "main": [
+        [
+          {
+            "node": "Sign GET",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run on demand": {
+      "main": [
+        [
+          {
+            "node": "Verify signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify signature": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Respond 202",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 202": {
+      "main": [
+        [
+          {
+            "node": "Sign GET",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign GET": {
+      "main": [
+        [
+          {
+            "node": "Get overdue loans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get overdue loans": {
+      "main": [
+        [
+          {
+            "node": "Split loans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split loans": {
+      "main": [
+        [
+          {
+            "node": "Send reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send reminder": {
+      "main": [
+        [
+          {
+            "node": "Sign POST",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sign POST",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign POST": {
+      "main": [
+        [
+          {
+            "node": "Record reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
