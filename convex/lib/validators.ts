@@ -50,7 +50,7 @@ export function isAutomationEventStatus(value: unknown): value is AutomationEven
   return AUTOMATION_EVENT_STATUSES.some((status) => status === value);
 }
 
-// Text limits, enforced in mutations (Phase 2).
+// Text limits, enforced in mutations.
 export const LIMITS = {
   toolName: 80,
   toolDescription: 500,

@@ -199,10 +199,3 @@ Idempotency keys in `automationEvents`:
 
 - `npm test` covers access rules, loan transitions, notifications, the signed HTTP routes, the HMAC helper and the static workflow checks. It uses Vitest with `convex-test` and needs no running services.
 - `npm run e2e:n8n` runs against the real stack. It checks a signed notification, a tampered one, an overdue reminder sent once per day, and a failure reaching the admin and Convex.
-
-## What would change for production
-
-- A real email provider behind the same SMTP credential, with SPF and DKIM set up.
-- A managed n8n with its own database, and the secret in a secret manager. Rotating the secret would need a short window where both the old and the new secret are accepted.
-- An alert when `automationEvents` collects `failed` rows, instead of relying on someone reading the admin inbox.
-- A cleanup job for old `automationEvents` rows.
