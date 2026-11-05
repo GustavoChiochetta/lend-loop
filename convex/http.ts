@@ -41,22 +41,48 @@ signedRoute("POST", "/reminder-status", async (ctx, raw) => {
   return ok ? Response.json({ ok: true }) : badRequest();
 });
 
+signedRoute("POST", "/workflow-error", async (ctx, raw) => {
+  const report = parseWorkflowError(raw);
+  if (!report) return badRequest();
+  await ctx.runMutation(internal.automation.recordWorkflowError, report);
+  return Response.json({ ok: true });
+});
+
 type Reminder = { loanId: string; date: string; status: AutomationEventStatus; detail?: string };
 
-function parseReminder(raw: string): Reminder | null {
-  let body: unknown;
+// The fields of a JSON object body, each still unchecked; null for anything else.
+function parseObject(raw: string): Record<string, unknown> | null {
   try {
-    body = JSON.parse(raw);
+    const body: unknown = JSON.parse(raw);
+    return typeof body === "object" && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
   } catch {
     return null;
   }
-  if (typeof body !== "object" || body === null) return null;
-  const { loanId, date, status, detail } = body as Record<string, unknown>; // each field is checked below
+}
+
+function parseReminder(raw: string): Reminder | null {
+  const body = parseObject(raw);
+  if (!body) return null;
+  const { loanId, date, status, detail } = body;
   if (typeof loanId !== "string" || typeof date !== "string" || !isIsoDate(date)) return null;
   if (!isAutomationEventStatus(status)) return null;
   if (detail === undefined) return { loanId, date, status };
   if (typeof detail !== "string" || detail.length > LIMITS.automationDetail) return null;
   return { loanId, date, status, detail };
+}
+
+type WorkflowError = { executionId: string; workflow: string; node?: string; message: string; loanId?: string };
+
+function parseWorkflowError(raw: string): WorkflowError | null {
+  const body = parseObject(raw);
+  if (!body) return null;
+  const { executionId, workflow, node, message, loanId } = body;
+  if (typeof executionId !== "string" || executionId.length === 0 || executionId.length > LIMITS.executionId) return null;
+  if (typeof workflow !== "string" || workflow.length === 0) return null;
+  if (typeof message !== "string" || message.length > LIMITS.automationDetail) return null;
+  if (node !== undefined && typeof node !== "string") return null;
+  if (loanId !== undefined && typeof loanId !== "string") return null;
+  return { executionId, workflow, node, message, loanId };
 }
 
 export default http;

@@ -6,15 +6,24 @@ import type { AutomationEventStatus, AutomationEventType, LoanStatus } from "./v
 // idempotency key, so it must match the rows already written.
 export type EventRef =
   | { kind: "notify"; loanId: Id<"loans">; status: LoanStatus }
-  | { kind: "reminder"; loanId: Id<"loans">; date: string };
+  | { kind: "reminder"; loanId: Id<"loans">; date: string }
+  | { kind: "error"; executionId: string; loanId?: Id<"loans"> };
 
 const TYPE: Record<EventRef["kind"], AutomationEventType> = {
   notify: "request_notification",
   reminder: "overdue_reminder",
+  error: "workflow_error",
 };
 
 function keyOf(ref: EventRef) {
-  return `${ref.kind}:${ref.loanId}:${ref.kind === "notify" ? ref.status : ref.date}`;
+  switch (ref.kind) {
+    case "notify":
+      return `notify:${ref.loanId}:${ref.status}`;
+    case "reminder":
+      return `reminder:${ref.loanId}:${ref.date}`;
+    case "error":
+      return `error:${ref.executionId}`;
+  }
 }
 
 async function find(ctx: QueryCtx, ref: EventRef) {
